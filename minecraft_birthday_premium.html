@@ -1,0 +1,1323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minecraft 11岁生日大冒险</title>
+
+<!-- 外部素材1: Google Fonts - 像素字体 (Minecraft风格) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=DotGothic16&display=swap" rel="stylesheet">
+
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: #0b0e1a;
+  min-height: 100vh;
+  overflow-x: hidden;
+  font-family: 'Press Start 2P', 'DotGothic16', monospace;
+  color: #fff;
+}
+
+#scene {
+  position: relative;
+  width: 100vw;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+/* ---------- 天空层（视差） ---------- */
+.sky {
+  position: absolute; inset: 0;
+  background: linear-gradient(to bottom, #87ceeb 0%, #a8ddf0 55%, #cdeffb 75%);
+  transition: background 2s;
+}
+.sky.night {
+  background: linear-gradient(to bottom, #0b1026 0%, #1b2547 55%, #2d3a6e 100%);
+}
+
+/* Minecraft方形太阳/月亮 */
+.celestial {
+  position: absolute; top: 8%; left: 75%;
+  width: 90px; height: 90px;
+  image-rendering: pixelated;
+  transition: all 2s;
+}
+.celestial.sun {
+  background: #fff200;
+  box-shadow: 0 0 60px 20px rgba(255, 242, 0, .6),
+              0 0 120px 60px rgba(255, 200, 0, .3);
+}
+.celestial.moon {
+  background: #e8e8d0;
+  box-shadow: 0 0 40px 15px rgba(230, 230, 200, .4);
+}
+/* 方形太阳的光晕像素块 */
+.celestial::after {
+  content:''; position:absolute; inset:-12px;
+  border: 6px solid rgba(255,242,0,.15);
+}
+
+/* ---------- 像素云 ---------- */
+.cloud {
+  position: absolute;
+  background: #fff;
+  box-shadow:
+    20px 0 0 0 #fff, 40px 0 0 0 #fff, 60px 0 0 0 #fff,
+    20px -20px 0 0 #fff, 40px -20px 0 0 #fff,
+    20px 20px 0 0 #fff, 40px 20px 0 0 #fff;
+  width: 20px; height: 20px;
+  opacity: .9;
+  image-rendering: pixelated;
+}
+
+/* ---------- 星星 ---------- */
+.star {
+  position: absolute;
+  background: #fff;
+  width: 4px; height: 4px;
+  opacity: 0;
+  transition: opacity 2s;
+}
+.night-mode .star { opacity: 1; }
+
+/* ---------- 流星 ---------- */
+.shooting-star {
+  position: absolute;
+  width: 4px; height: 4px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 6px 2px rgba(255,255,255,.8);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+/* 流星拖尾：用渐变长条实现 */
+.shooting-star::before {
+  content: '';
+  position: absolute;
+  top: 50%; right: 2px;
+  width: 120px; height: 2px;
+  transform: translateY(-50%);
+  background: linear-gradient(to left, rgba(255,255,255,.9), rgba(255,255,255,0));
+  border-radius: 2px;
+}
+
+/* ---------- 地形 ---------- */
+.terrain {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: 34vh;
+}
+/* 纹理由Canvas程序化生成（见JS generateTextures），保证100%可用
+   下面CSS作为纹理生成前的瞬时占位 */
+.grass-top {
+  height: 64px;
+  background-color: #5d9c3c;
+  background-size: 64px 64px;
+  background-repeat: repeat;
+  image-rendering: pixelated;
+}
+.dirt {
+  position: absolute; top: 64px; bottom: 0; left: 0; right: 0;
+  background-color: #79553a;
+  background-size: 64px 64px;
+  background-repeat: repeat;
+  image-rendering: pixelated;
+}
+
+/* ---------- 橡树 ---------- */
+/* 树干基部与草皮地面贴齐（与角色同一地平线）；
+   树叶用绝对定位压在树干顶端，不再撑高容器、不会把树顶离地面 */
+.tree {
+  position: absolute;
+  bottom: calc(34vh - 8px); /* 微微埋入草皮，与地面贴齐 */
+  width: 128px;
+}
+.trunk {
+  width: 32px; height: 128px;
+  background: repeating-linear-gradient(90deg, #6b4a26 0 8px, #5a3d1f 8px 16px, #7a552d 16px 24px);
+  margin: 0 auto;
+  image-rendering: pixelated;
+}
+.leaves {
+  position: absolute;
+  bottom: 108px; /* 树叶底边压住树干顶端20px，枝叶与树干无缝衔接 */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 128px; height: 96px;
+  background:
+    repeating-linear-gradient(45deg, #2f6b1e 0 16px, #3a7d24 16px 32px, #265918 32px 48px);
+  clip-path: polygon(15% 0, 85% 0, 100% 33%, 100% 100%, 0 100%, 0 33%);
+  image-rendering: pixelated;
+}
+
+/* ---------- 角色 Steve ---------- */
+.steve {
+  position: absolute;
+  bottom: calc(34vh - 6px);
+  left: 68%;
+  width: 64px; height: 128px;
+  z-index: 5;
+  filter: drop-shadow(6px 6px 0 rgba(0,0,0,.25));
+}
+.steve .head {
+  width: 48px; height: 48px; margin: 0 auto;
+  position: relative;
+  background: #c9935f; /* 肤色 */
+  image-rendering: pixelated;
+}
+/* 头发 */
+.steve .head::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:14px;
+  background: #3a2a18;
+  box-shadow: 0 4px 0 #3a2a18;
+}
+/* 眼睛 */
+.steve .eyes {
+  position:absolute; top:26px; left:0; right:0;
+  display:flex; justify-content:space-evenly;
+}
+.steve .eye {
+  width: 8px; height: 6px;
+  background: linear-gradient(90deg, #fff 50%, #5b3fa8 50%);
+}
+.steve .body {
+  width: 48px; height: 48px; margin: 0 auto;
+  background: linear-gradient(#00a8a8, #008c8c);
+}
+.steve .arm {
+  position: absolute; top: 48px;
+  width: 16px; height: 48px;
+  background: linear-gradient(#00a8a8 70%, #c9935f 70%);
+  transform-origin: top center;
+}
+.steve .arm.l { left: -4px; }
+.steve .arm.r { right: -4px; }
+.steve .leg {
+  position: absolute; top: 96px;
+  width: 22px; height: 32px;
+  background: linear-gradient(#4040c0 60%, #7a7a7a 60%);
+  transform-origin: top center;
+}
+.steve .leg.l { left: 6px; }
+.steve .leg.r { right: 6px; }
+
+/* ---------- 角色 Alex ---------- */
+.alex {
+  position: absolute;
+  bottom: calc(34vh - 6px);
+  left: 18%;
+  width: 64px; height: 128px;
+  z-index: 5;
+  filter: drop-shadow(6px 6px 0 rgba(0,0,0,.25));
+}
+.alex .head {
+  width: 48px; height: 48px; margin: 0 auto;
+  position: relative;
+  background: #e8b184; /* Alex肤色略浅 */
+  image-rendering: pixelated;
+}
+/* Alex橙色长发 */
+.alex .head::before {
+  content:''; position:absolute; top:0; left:-2px; right:-2px; height:18px;
+  background: #d97b29;
+  box-shadow: 0 4px 0 #d97b29, -2px 8px 0 #c96a1e, 46px 8px 0 #c96a1e;
+}
+/* Alex两侧垂发 */
+.alex .head::after {
+  content:''; position:absolute; top:18px; left:-4px; width:6px; height:30px;
+  background: #c96a1e;
+  box-shadow: 52px 0 0 #c96a1e;
+}
+.alex .eyes {
+  position:absolute; top:28px; left:0; right:0;
+  display:flex; justify-content:space-evenly;
+}
+.alex .eye {
+  width: 8px; height: 6px;
+  background: linear-gradient(90deg, #fff 50%, #3a8c3f 50%); /* 绿眼睛 */
+}
+.alex .body {
+  width: 44px; height: 48px; margin: 0 auto;
+  background: linear-gradient(#4caf50, #3d8b40); /* 绿色上衣 */
+}
+.alex .arm {
+  position: absolute; top: 48px;
+  width: 14px; height: 48px;
+  background: linear-gradient(#4caf50 70%, #e8b184 70%);
+  transform-origin: top center;
+}
+.alex .arm.l { left: -2px; }
+.alex .arm.r { right: -2px; }
+.alex .leg {
+  position: absolute; top: 96px;
+  width: 20px; height: 32px;
+  background: linear-gradient(#5d4037 60%, #8d6e63 60%); /* 棕色裤子 */
+  transform-origin: top center;
+}
+.alex .leg.l { left: 8px; }
+.alex .leg.r { right: 8px; }
+
+/* 走路动画状态 */
+.walking .leg.l { animation: legSwing .4s ease-in-out infinite; }
+.walking .leg.r { animation: legSwing .4s ease-in-out infinite reverse; }
+.walking .arm.l { animation: armSwing .4s ease-in-out infinite reverse; }
+.walking .arm.r { animation: armSwing .4s ease-in-out infinite; }
+@keyframes legSwing {
+  0%, 100% { transform: rotate(25deg); }
+  50% { transform: rotate(-25deg); }
+}
+@keyframes armSwing {
+  0%, 100% { transform: rotate(-20deg); }
+  50% { transform: rotate(20deg); }
+}
+/* 跳跃挤压拉伸 */
+.jumping { animation: squash .5s ease-out; }
+@keyframes squash {
+  0% { transform: scaleY(1); }
+  30% { transform: scaleY(.85) scaleX(1.1); }
+  60% { transform: scaleY(1.08) scaleX(.95); }
+  100% { transform: scaleY(1); }
+}
+
+/* ---------- 蛋糕 ---------- */
+.cake-wrap {
+  position: absolute;
+  bottom: calc(34vh - 4px);
+  left: 50%; transform: translateX(-50%);
+  z-index: 6;
+  text-align: center;
+}
+.cake {
+  position: relative;
+  width: 200px; height: 90px;
+  margin: 0 auto;
+}
+.cake .layer {
+  position: absolute; left: 0; right: 0;
+  border-radius: 4px;
+}
+.cake .layer.b1 { bottom: 0;  height: 38px; background: linear-gradient(#fff8f0 55%, #c0392b 55%); box-shadow: inset 0 -6px 0 rgba(0,0,0,.1); }
+.cake .layer.b2 { bottom: 34px; left: 18px; right: 18px; height: 30px; background: linear-gradient(#fff8f0 55%, #e74c3c 55%); }
+.cake .layer.b3 { bottom: 60px; left: 40px; right: 40px; height: 24px; background: linear-gradient(#fff8f0 55%, #ff7675 55%); }
+.candle {
+  position: absolute; bottom: 84px;
+  width: 8px; height: 26px;
+  background: repeating-linear-gradient(45deg, #fff 0 4px, #ff7675 4px 8px);
+}
+.flame {
+  position: absolute; bottom: 110px;
+  width: 14px; height: 18px;
+  background: radial-gradient(circle at 50% 70%, #fff200 20%, #ff9f1a 60%, #ff4500 100%);
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  filter: blur(.5px) drop-shadow(0 0 8px #ff9f1a);
+  transform-origin: bottom center;
+}
+/* 蜡烛芯 */
+.wick {
+  position: absolute; bottom: 108px;
+  width: 3px; height: 6px;
+  background: #333;
+}
+/* 熄灭的余烬（红光闪烁） */
+.ember {
+  position: absolute; bottom: 108px;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: radial-gradient(#ff6b35, #8b2e0e);
+  opacity: 0;
+  filter: blur(.5px);
+}
+/* 烟雾 */
+.smoke {
+  position: absolute;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(rgba(200,200,200,.7), rgba(150,150,150,0));
+  pointer-events: none;
+}
+.cake-plate {
+  width: 240px; height: 12px; margin: -2px auto 0;
+  background: linear-gradient(#dfe6e9, #b2bec3);
+  border-radius: 6px;
+}
+
+/* ---------- 礼物盒 ---------- */
+.gift {
+  position: absolute;
+  bottom: calc(34vh - 4px);
+  z-index: 4;
+  cursor: pointer;
+  image-rendering: pixelated;
+}
+.gift .box {
+  width: 64px; height: 48px;
+  position: relative;
+  box-shadow: 4px 4px 0 rgba(0,0,0,.2);
+}
+.gift .lid {
+  width: 72px; height: 14px;
+  position: absolute; top: -12px; left: -4px;
+  box-shadow: 4px 4px 0 rgba(0,0,0,.2);
+  transform-origin: left bottom;
+}
+.gift .ribbon-v { position:absolute; left: 50%; top:-12px; bottom:0; width:10px; transform:translateX(-50%); }
+.gift .ribbon-h { position:absolute; left:-4px; right:-4px; top: 8px; height:10px; }
+.gift .bow {
+  position:absolute; top:-26px; left:50%; transform:translateX(-50%);
+  width: 30px; height: 16px;
+  border-radius: 8px 8px 0 0;
+}
+.gift.red .box { background:#c0392b; } .gift.red .lid { background:#e74c3c; }
+.gift.red .ribbon-v,.gift.red .ribbon-h,.gift.red .bow { background:#f1c40f; }
+.gift.green .box { background:#27ae60; } .gift.green .lid { background:#2ecc71; }
+.gift.green .ribbon-v,.gift.green .ribbon-h,.gift.green .bow { background:#e74c3c; }
+.gift.blue .box { background:#2980b9; } .gift.blue .lid { background:#3498db; }
+.gift.blue .ribbon-v,.gift.blue .ribbon-h,.gift.blue .bow { background:#f1c40f; }
+
+/* ---------- 宝物弹出（宝石/宝剑） ---------- */
+.treasure {
+  position: absolute;
+  z-index: 8;
+  pointer-events: none;
+  font-size: 34px;
+  filter: drop-shadow(0 0 8px rgba(255,215,0,.8));
+}
+.treasure-label {
+  position: absolute;
+  top: -24px; left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  color: #ffe66d;
+  text-shadow: 2px 2px 0 #000;
+  white-space: nowrap;
+}
+
+/* ---------- TNT ---------- */
+.tnt {
+  position: absolute;
+  bottom: calc(34vh - 4px);
+  left: 32%;
+  width: 56px; height: 56px;
+  z-index: 5;
+  cursor: pointer;
+  image-rendering: pixelated;
+  filter: drop-shadow(4px 4px 0 rgba(0,0,0,.25));
+}
+.tnt .body {
+  width: 56px; height: 56px;
+  background:
+    linear-gradient(#c0392b 0 30%, #e74c3c 30% 70%, #c0392b 70% 100%);
+  border: 3px solid #7b241c;
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+.tnt .label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 11px;
+  color: #fff;
+  background: #f5f0e1;
+  color: #333;
+  padding: 3px 5px;
+  letter-spacing: 1px;
+  text-shadow: none;
+}
+/* TNT引信 */
+.tnt .fuse {
+  position: absolute;
+  top: -10px; left: 50%;
+  width: 4px; height: 12px;
+  background: #6e5028;
+  transform: translateX(-50%);
+}
+/* 引信火花 */
+.tnt .spark {
+  position: absolute;
+  top: -16px; left: 50%;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(#fff200, #ff9f1a);
+  transform: translateX(-50%);
+  opacity: 0;
+  filter: blur(.5px) drop-shadow(0 0 4px #ff9f1a);
+}
+.tnt.ignited .spark { opacity: 1; }
+
+/* ---------- 标题文字 ---------- */
+.title-area {
+  position: absolute;
+  top: 12%; left: 0; right: 0;
+  text-align: center;
+  z-index: 8;
+  pointer-events: none;
+}
+.title-main {
+  font-size: clamp(28px, 6vw, 64px);
+  color: #fff;
+  text-shadow:
+    4px 4px 0 #3f3f3f,
+    8px 8px 0 rgba(0,0,0,.3);
+  letter-spacing: 4px;
+}
+.title-sub {
+  margin-top: 16px;
+  font-size: clamp(12px, 2vw, 20px);
+  color: #ffe66d;
+  text-shadow: 2px 2px 0 #3f3f3f;
+}
+.age-badge {
+  display: inline-block;
+  margin-top: 20px;
+  padding: 10px 22px;
+  font-size: clamp(16px, 3vw, 28px);
+  color: #fff;
+  background: linear-gradient(#5ac8fa, #3498db);
+  border: 4px solid #fff;
+  box-shadow: 4px 4px 0 rgba(0,0,0,.3);
+}
+
+/* ---------- 祝福气泡 ---------- */
+.speech {
+  position: absolute;
+  bottom: calc(34vh + 150px);
+  left: 24%;
+  background: #fff;
+  color: #222;
+  padding: 14px 18px;
+  border: 4px solid #222;
+  border-radius: 4px;
+  font-size: 12px;
+  max-width: 260px;
+  z-index: 9;
+  opacity: 0;
+}
+.speech::after {
+  content:''; position:absolute; bottom:-16px; left:24px;
+  border: 8px solid transparent;
+  border-top-color: #222;
+}
+
+/* ---------- 粒子画布 ---------- */
+#particles {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  z-index: 7;
+}
+
+/* ---------- 控制按钮 ---------- */
+.controls {
+  position: fixed;
+  bottom: 20px; left: 50%;
+  transform: translateX(-50%);
+  display: flex; gap: 12px;
+  z-index: 20;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.mc-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 12px;
+  padding: 14px 20px;
+  color: #fff;
+  background: linear-gradient(#9e9e9e 0%, #7c7c7c 45%, #5f5f5f 55%, #6e6e6e 100%);
+  border: 3px solid #000;
+  box-shadow: inset 2px 2px 0 rgba(255,255,255,.35), inset -2px -2px 0 rgba(0,0,0,.4), 4px 4px 0 rgba(0,0,0,.4);
+  cursor: pointer;
+  text-shadow: 2px 2px 0 rgba(0,0,0,.5);
+  transition: transform .1s;
+}
+.mc-btn:hover { filter: brightness(1.15); }
+.mc-btn:active { transform: translate(2px,2px); box-shadow: inset 2px 2px 0 rgba(0,0,0,.3); }
+.mc-btn.green { background: linear-gradient(#7dd35f 0%, #5cab43 45%, #4a8c36 55%, #57a03f 100%); }
+.mc-btn.gold { background: linear-gradient(#ffd54f 0%, #ffb300 45%, #ff8f00 55%, #ffa000 100%); color:#4e342e; text-shadow:1px 1px 0 rgba(255,255,255,.5); }
+
+/* 经验条 */
+.xp-bar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  height: 18px;
+  background: #222;
+  border-top: 3px solid #000;
+  z-index: 15;
+}
+.xp-fill {
+  height: 100%; width: 0%;
+  background: repeating-linear-gradient(90deg, #7cfc00 0 12px, #5edc00 12px 24px);
+}
+.xp-text {
+  position: fixed; bottom: 22px; left: 50%;
+  transform: translateX(-50%);
+  color: #7cfc00;
+  font-size: 14px;
+  text-shadow: 2px 2px 0 #000;
+  z-index: 16;
+}
+.key-hint {
+  position: fixed;
+  top: 12px; right: 12px;
+  background: rgba(0,0,0,.65);
+  color: #ffe66d;
+  font-size: 11px;
+  padding: 8px 16px;
+  border: 2px solid rgba(255,230,109,.5);
+  border-radius: 4px;
+  z-index: 16;
+  white-space: nowrap;
+  text-shadow: 1px 1px 0 #000;
+}
+@media (max-width: 768px) {
+  .key-hint { display: none; } /* 移动端无键盘，隐藏提示 */
+}
+</style>
+</head>
+<body>
+
+<div id="scene">
+  <!-- 天空 -->
+  <div class="sky" id="sky"></div>
+  <div class="celestial sun" id="celestial"></div>
+
+  <!-- 星星容器(JS生成) -->
+  <div id="stars"></div>
+  <!-- 流星容器(JS生成) -->
+  <div id="meteors"></div>
+
+  <!-- 云(JS生成) -->
+  <div id="clouds"></div>
+
+  <!-- 标题 -->
+  <div class="title-area">
+    <div class="title-main" id="titleMain">HAPPY BIRTHDAY</div>
+    <div class="title-sub">Minecraft 大冒险 · 11岁生日庆典</div>
+    <div class="age-badge">LEVEL 11 解锁！</div>
+  </div>
+
+  <!-- 粒子画布 -->
+  <canvas id="particles"></canvas>
+
+  <!-- Steve -->
+  <div class="steve" id="steve">
+    <div class="head"><div class="eyes"><div class="eye"></div><div class="eye"></div></div></div>
+    <div class="body"></div>
+    <div class="arm l"></div>
+    <div class="arm r"></div>
+    <div class="leg l"></div>
+    <div class="leg r"></div>
+  </div>
+
+  <!-- Alex -->
+  <div class="alex" id="alex">
+    <div class="head"><div class="eyes"><div class="eye"></div><div class="eye"></div></div></div>
+    <div class="body"></div>
+    <div class="arm l"></div>
+    <div class="arm r"></div>
+    <div class="leg l"></div>
+    <div class="leg r"></div>
+  </div>
+
+  <!-- 对话气泡 -->
+  <div class="speech" id="speech">哇！是我的生日蛋糕！</div>
+
+  <!-- 蛋糕 -->
+  <div class="cake-wrap">
+    <div class="cake">
+      <div class="layer b1"></div>
+      <div class="layer b2"></div>
+      <div class="layer b3"></div>
+      <div class="candle" style="left:88px;"></div>
+      <div class="wick" style="left:90.5px;"></div>
+      <div class="ember" id="ember" style="left:90px;"></div>
+      <div class="flame" id="flame" style="left:85px;"></div>
+    </div>
+    <div class="cake-plate"></div>
+  </div>
+
+  <!-- 礼物（可点击） -->
+  <div class="gift red" id="gift1" style="left:8%;">
+    <div class="lid"></div><div class="box"></div>
+    <div class="ribbon-v"></div><div class="ribbon-h"></div><div class="bow"></div>
+  </div>
+  <div class="gift green" id="gift2" style="right:10%;">
+    <div class="lid"></div><div class="box"></div>
+    <div class="ribbon-v"></div><div class="ribbon-h"></div><div class="bow"></div>
+  </div>
+  <div class="gift blue" id="gift3" style="right:26%;">
+    <div class="lid"></div><div class="box"></div>
+    <div class="ribbon-v"></div><div class="ribbon-h"></div><div class="bow"></div>
+  </div>
+
+  <!-- TNT（点击/按钮点燃放烟花） -->
+  <div class="tnt" id="tnt" title="点击点燃TNT">
+    <div class="fuse"></div>
+    <div class="spark"></div>
+    <div class="body"><span class="label">TNT</span></div>
+  </div>
+
+  <!-- 树 -->
+  <div class="tree" style="left:4%;"><div class="trunk"></div><div class="leaves"></div></div>
+  <div class="tree" style="right:3%;"><div class="trunk"></div><div class="leaves"></div></div>
+
+  <!-- 地形 -->
+  <div class="terrain">
+    <div class="grass-top" id="grassTop"></div>
+    <div class="dirt" id="dirt"></div>
+  </div>
+</div>
+
+<!-- 控制按钮 -->
+<div class="controls">
+  <button class="mc-btn green" id="btnCelebrate">🎉 放烟花</button>
+  <button class="mc-btn gold" id="btnWish">⭐ 许愿吹蜡烛</button>
+  <button class="mc-btn" id="btnDayNight">🌙 昼夜切换</button>
+</div>
+
+<!-- 操作提示 -->
+<div class="key-hint" id="keyHint">⌨️ 方向键 / WASD 移动 Alex · 空格跳跃</div>
+
+<!-- 经验条 -->
+<div class="xp-text">Lv.11</div>
+<div class="xp-bar"><div class="xp-fill" id="xpFill"></div></div>
+
+<!-- 外部素材3: GSAP 动画引擎（CDN）- 提供流畅物理动画 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+
+<script>
+/* ============================================================
+   Minecraft 11岁生日大冒险 - 使用GSAP驱动的流畅动画
+   ============================================================ */
+
+const W = () => window.innerWidth;
+const H = () => window.innerHeight;
+
+/* ---------- 生成星星与云 ---------- */
+const starsBox = document.getElementById('stars');
+for (let i = 0; i < 60; i++) {
+  const s = document.createElement('div');
+  s.className = 'star';
+  s.style.left = Math.random() * 100 + '%';
+  s.style.top = Math.random() * 45 + '%';
+  starsBox.appendChild(s);
+}
+const cloudsBox = document.getElementById('clouds');
+const cloudList = [];
+for (let i = 0; i < 6; i++) {
+  const c = document.createElement('div');
+  c.className = 'cloud';
+  c.style.top = (5 + Math.random() * 25) + '%';
+  const scale = 0.8 + Math.random() * 1.6;
+  c.style.transform = `scale(${scale})`;
+  cloudsBox.appendChild(c);
+  cloudList.push(c);
+  // 云无限漂移
+  gsap.fromTo(c, { x: -200 }, {
+    x: W() + 200,
+    duration: 60 + Math.random() * 60,
+    repeat: -1,
+    ease: 'none',
+    delay: -Math.random() * 80
+  });
+}
+
+/* ---------- 程序化生成Minecraft风格纹理（Canvas，无外部依赖） ---------- */
+/* 用伪随机噪点在16x16网格上绘制像素纹理，生成dataURL作为背景 */
+function makeTexture(palette) {
+  const size = 16, px = 4; // 16x16像素，每像素放大4倍 = 64px
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size * px;
+  const c = cv.getContext('2d');
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      // 加权随机选色：前面的颜色概率更高
+      const r = Math.random();
+      let color;
+      if (r < 0.5) color = palette[0];
+      else if (r < 0.75) color = palette[1];
+      else if (r < 0.9) color = palette[2];
+      else color = palette[3];
+      c.fillStyle = color;
+      c.fillRect(x * px, y * px, px, px);
+    }
+  }
+  return cv.toDataURL();
+}
+
+function generateTextures() {
+  // 草方块顶部：绿色系噪点
+  const grassURL = makeTexture(['#6ab04c', '#5d9c3c', '#7cbd51', '#4e8a33']);
+  document.getElementById('grassTop').style.backgroundImage = `url(${grassURL})`;
+  // 泥土：棕色系噪点
+  const dirtURL = makeTexture(['#8a6242', '#79553a', '#96714e', '#6b4a32']);
+  document.getElementById('dirt').style.backgroundImage = `url(${dirtURL})`;
+}
+generateTextures();
+
+/* ---------- 入场动画时间轴 ---------- */
+const tl = gsap.timeline({ defaults: { ease: 'back.out(1.6)' } });
+gsap.set('#steve', { y: -400, opacity: 0 });
+gsap.set('#alex', { y: -400, opacity: 0 });
+gsap.set('.cake-wrap', { scale: 0 });
+gsap.set('.gift', { scale: 0, rotation: -15 });
+gsap.set('#tnt', { scale: 0 });
+gsap.set('.title-main', { y: -80, opacity: 0 });
+gsap.set('.title-sub, .age-badge', { opacity: 0 });
+gsap.set('.tree', { scaleY: 0, transformOrigin: 'bottom' });
+
+tl.to('.title-main', { y: 0, opacity: 1, duration: .8 })
+  .to('.title-sub', { opacity: 1, duration: .5 }, '-=.3')
+  .to('.age-badge', { opacity: 1, scale: 1.1, yoyo: true, repeat: 1, duration: .3 }, '-=.2')
+  .to('.tree', { scaleY: 1, duration: .6, stagger: .15 }, '-=.4')
+  .to('#steve', { y: 0, opacity: 1, duration: 1, ease: 'bounce.out' }, '-=.3')
+  .to('#alex', { y: 0, opacity: 1, duration: 1, ease: 'bounce.out' }, '-=.7')
+  .to('.cake-wrap', { scale: 1, duration: .7, ease: 'elastic.out(1, 0.5)' }, '-=.4')
+  .to('.gift', { scale: 1, rotation: 0, duration: .6, stagger: .15, ease: 'elastic.out(1, 0.6)' }, '-=.3')
+  .to('#tnt', { scale: 1, duration: .6, ease: 'elastic.out(1, 0.5)' }, '-=.2')
+  .add(() => {
+    introDone = true;
+    showSpeech('哇！是我的生日蛋糕！🎂');
+    // 操作提示淡入，10秒后淡出
+    gsap.fromTo('#keyHint', { opacity: 0 }, { opacity: 1, duration: .6 });
+    gsap.to('#keyHint', { opacity: 0, duration: 1, delay: 10 });
+  });
+
+/* ---------- 火焰摇曳（命名以便吹蜡烛时暂停/恢复） ---------- */
+const flameFlicker = gsap.to('#flame', {
+  scaleX: .8, scaleY: 1.2, rotation: 4,
+  duration: .18, yoyo: true, repeat: -1, ease: 'sine.inOut',
+  transformOrigin: 'bottom center'
+});
+
+/* ---------- 经验条 ---------- */
+gsap.to('#xpFill', { width: '73%', duration: 3, ease: 'power2.out', delay: 1.5 });
+
+/* ---------- 对话气泡 ---------- */
+const speechLines = [
+  '哇！是我的生日蛋糕！🎂',
+  '11级达成！新冒险开始！⚔️',
+  '这些礼物都是我的吗？🎁',
+  '一起放烟花吧！🎆',
+  '谢谢大家的祝福！❤️'
+];
+let speechIdx = 0;
+function showSpeech(text) {
+  const sp = document.getElementById('speech');
+  sp.textContent = text;
+  gsap.timeline()
+    .to(sp, { opacity: 1, y: -8, duration: .4, ease: 'back.out(2)' })
+    .to(sp, { opacity: 0, duration: .4, delay: 2.6 });
+}
+setInterval(() => {
+  speechIdx = (speechIdx + 1) % speechLines.length;
+  showSpeech(speechLines[speechIdx]);
+}, 5000);
+
+/* ============================================================
+   粒子系统（Canvas）- 烟花 + 五彩纸屑
+   ============================================================ */
+const canvas = document.getElementById('particles');
+const ctx = canvas.getContext('2d');
+function resize() { canvas.width = W(); canvas.height = H(); }
+resize();
+window.addEventListener('resize', resize);
+
+const particles = [];
+const COLORS = ['#ff4757', '#ffa502', '#2ed573', '#1e90ff', '#eccc68', '#ff6b81', '#7bed9f', '#70a1ff'];
+
+class Particle {
+  constructor(x, y, type) {
+    this.x = x; this.y = y;
+    this.type = type;
+    const a = Math.random() * Math.PI * 2;
+    const sp = type === 'firework' ? 2 + Math.random() * 5 : 1 + Math.random() * 3;
+    this.vx = Math.cos(a) * sp;
+    this.vy = Math.sin(a) * sp - (type === 'confetti' ? 4 : 0);
+    this.life = 1;
+    this.decay = type === 'firework' ? .008 + Math.random() * .012 : .004 + Math.random() * .006;
+    this.color = COLORS[Math.floor(Math.random() * COLORS.length)];
+    this.size = type === 'firework' ? 3 + Math.random() * 3 : 6 + Math.random() * 6;
+    this.rot = Math.random() * Math.PI * 2;
+    this.rotSpeed = (Math.random() - .5) * .2;
+  }
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += this.type === 'firework' ? .06 : .12; // 重力
+    this.vx *= .99;
+    this.life -= this.decay;
+    this.rot += this.rotSpeed;
+  }
+  draw() {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, this.life);
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rot);
+    ctx.fillStyle = this.color;
+    if (this.type === 'firework') {
+      // 像素烟花颗粒 - 方形
+      ctx.fillRect(-this.size/2, -this.size/2, this.size, this.size);
+      ctx.shadowColor = this.color;
+      ctx.shadowBlur = 10;
+      ctx.fillRect(-this.size/2, -this.size/2, this.size, this.size);
+    } else {
+      // 彩纸 - 小矩形
+      ctx.fillRect(-this.size/2, -this.size/4, this.size, this.size/2);
+    }
+    ctx.restore();
+  }
+}
+
+function loop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.update();
+    p.draw();
+    if (p.life <= 0 || p.y > canvas.height + 20) particles.splice(i, 1);
+  }
+  requestAnimationFrame(loop);
+}
+loop();
+
+/* 烟花发射 */
+function launchFirework(x, y) {
+  // 上升弹
+  const rocket = { x, y: canvas.height, vy: -9 - Math.random() * 3 };
+  const rise = setInterval(() => {
+    rocket.y += rocket.vy;
+    rocket.vy += .15;
+    particles.push(Object.assign(new Particle(rocket.x, rocket.y, 'firework'), { life: .3, decay: .05, size: 2 }));
+    if (rocket.vy >= -1 || rocket.y <= y) {
+      clearInterval(rise);
+      // 爆炸
+      for (let i = 0; i < 80; i++) particles.push(new Particle(rocket.x, rocket.y, 'firework'));
+    }
+  }, 16);
+}
+
+function confettiBurst(x, y, n = 40) {
+  for (let i = 0; i < n; i++) particles.push(new Particle(x, y, 'confetti'));
+}
+
+/* ---------- 按钮交互：TNT点燃放烟花 ---------- */
+let tntBusy = false;
+function igniteTNT() {
+  if (tntBusy) return;
+  tntBusy = true;
+  const tnt = document.getElementById('tnt');
+  tnt.classList.add('ignited');
+
+  // 引信火花闪烁 + TNT紧张抖动
+  const shake = gsap.timeline();
+  shake.to(tnt, { x: 2, duration: .06, repeat: 14, yoyo: true, ease: 'none' });
+  // TNT 红白闪烁警告
+  const flash = gsap.to('.tnt .body', { filter: 'brightness(1.8)', duration: .12, repeat: 7, yoyo: true });
+
+  // 火花粒子
+  const rect = tnt.getBoundingClientRect();
+  const fuseX = rect.left + rect.width / 2;
+  const fuseY = rect.top;
+  const sparkTimer = setInterval(() => {
+    particles.push(Object.assign(new Particle(fuseX, fuseY, 'firework'),
+      { life: .5, decay: .04, size: 2.5, vx: (Math.random()-.5)*3, vy: -Math.random()*2 }));
+  }, 60);
+
+  showSpeech('TNT点燃啦，快跑！💨');
+
+  // 1秒后"爆炸"发射烟花（绽放位置调高到天空 5%~16% 高度）
+  setTimeout(() => {
+    clearInterval(sparkTimer);
+    flash.kill();
+    shake.kill();
+    gsap.set('.tnt .body', { filter: 'none' });
+    gsap.set(tnt, { x: 0 });
+
+    // TNT跳起爆炸效果
+    gsap.timeline()
+      .to(tnt, { y: -30, duration: .15, ease: 'power2.out' })
+      .to(tnt, { y: 0, duration: .3, ease: 'bounce.out' });
+
+    // 地面小爆炸粒子
+    confettiBurst(fuseX, rect.top + 20, 25);
+
+    // 连发3发高空烟花（位置调高）
+    for (let i = 0; i < 3; i++) {
+      setTimeout(() => {
+        launchFirework(W() * (0.15 + Math.random() * 0.7), H() * (0.05 + Math.random() * 0.11));
+      }, 200 + i * 350);
+    }
+    setTimeout(() => showSpeech('哇！好漂亮的烟花！🎆'), 700);
+
+    tnt.classList.remove('ignited');
+    tntBusy = false;
+  }, 1000);
+}
+
+document.getElementById('btnCelebrate').addEventListener('click', igniteTNT);
+document.getElementById('tnt').addEventListener('click', igniteTNT);
+
+/* ---------- 蜡烛状态管理 ---------- */
+let candleLit = true;
+let candleBusy = false;
+let alexBlowCooldown = 0;
+let blowTimeline = null; // 当前熄灭动画引用，重燃时整体取消
+
+/* 重新点燃蜡烛：烛芯火光闪现 → 火苗舒展生长 → 恢复摇曳 */
+function relightCandle() {
+  if (candleBusy || candleLit) return;
+  candleBusy = true;
+  candleLit = true;
+  const flame = document.getElementById('flame');
+  const ember = document.getElementById('ember');
+  if (blowTimeline) { blowTimeline.kill(); blowTimeline = null; } // 取消余烬渐暗，不误杀摇曳
+  gsap.timeline()
+    .set(flame, { display: 'block', opacity: 1 })
+    .fromTo(flame, { scale: 0, scaleY: .3 }, { scale: 1.3, scaleY: 1.4, duration: .15, ease: 'power2.out' })
+    .to(flame, { scale: 1, scaleY: 1, duration: .4, ease: 'elastic.out(2, .4)', onComplete: () => {
+      flameFlicker.play();
+      candleBusy = false;
+    }});
+  gsap.to(ember, { opacity: 0, duration: .2 });
+  showSpeech('蜡烛又亮啦！');
+}
+
+/* 💨气流：从吹气者嘴边飘向蜡烛 */
+function puffWind(fromRect, toRect) {
+  const puff = document.createElement('div');
+  puff.textContent = '💨';
+  puff.style.cssText = 'position:absolute;font-size:20px;z-index:10;pointer-events:none;';
+  const sx = fromRect.left + fromRect.width * 0.5;
+  const sy = fromRect.top + 14;
+  puff.style.left = sx + 'px';
+  puff.style.top = sy + 'px';
+  document.getElementById('scene').appendChild(puff);
+  const dx = (toRect.left + toRect.width / 2) - sx;
+  const dy = (toRect.top + toRect.height / 2) - sy;
+  gsap.to(puff, {
+    x: dx * 0.85, y: dy * 0.85, scale: 1.5, opacity: 0,
+    duration: .6, ease: 'power1.out', onComplete: () => puff.remove()
+  });
+}
+
+/* 自然吹灭蜡烛：火苗受扰闪烁 → 倒伏变暗 → 收成小火点 → 轻轻一跳化作青烟 → 余烬缓缓冷却 */
+function blowOutCandle(source) {
+  if (candleBusy || !candleLit) return;
+  candleBusy = true;
+  candleLit = false;
+  const flame = document.getElementById('flame');
+  const ember = document.getElementById('ember');
+  flameFlicker.pause(); // 暂停摇曳（保留tween，重燃时恢复）
+  if (blowTimeline) blowTimeline.kill();
+
+  // 来源是Alex：嘴边飘出一股💨吹向蜡烛
+  if (source === 'alex') {
+    puffWind(alexState.el.getBoundingClientRect(), flame.getBoundingClientRect());
+    showSpeech('Alex鼓起腮帮——呼！💨');
+  }
+
+  blowTimeline = gsap.timeline();
+  const tl = blowTimeline;
+
+  // 1. 火苗受气流扰动，忽明忽暗地闪烁（不扭曲、不偏移）
+  tl.to(flame, { scaleX: 1.1, scaleY: .9, opacity: .8, rotation: 0, duration: .18, ease: 'sine.inOut' })
+    .to(flame, { scaleX: .88, scaleY: 1.1, opacity: 1, duration: .15, ease: 'sine.inOut' })
+    .to(flame, { scaleX: 1.06, scaleY: .9, opacity: .6, duration: .14, ease: 'sine.inOut' })
+  // 2. 火光渐暗，整体缩小向烛芯收拢
+    .to(flame, { scaleX: .55, scaleY: .58, opacity: .4, duration: .3, ease: 'sine.inOut' })
+    .to(flame, { scaleX: .28, scaleY: .28, opacity: .2, duration: .25, ease: 'power1.in' })
+  // 3. 最后一点火光悄然隐去——火苗干净地消失，无形变扭曲
+    .to(flame, { scaleX: .08, scaleY: .08, opacity: 0, duration: .3, ease: 'power1.out', onComplete: () => {
+      flame.style.display = 'none';
+      gsap.set(flame, { scaleX: 1, scaleY: 1, opacity: 1, rotation: 0 });
+      spawnSmoke(); // 火苗消失的瞬间，青烟升起
+      candleBusy = false;
+    }})
+  // 5. 烛芯余烬：暗红微光不规则明暗，缓缓冷却熄去
+    .to(ember, { opacity: .8, duration: .35 }, '-=.1')
+    .to(ember, { opacity: .3, duration: .6, ease: 'sine.inOut' })
+    .to(ember, { opacity: .5, duration: .35, ease: 'sine.inOut' })
+    .to(ember, { opacity: .15, duration: .8, ease: 'sine.inOut' })
+    .to(ember, { opacity: 0, duration: 1.5, ease: 'sine.out' });
+
+  if (source === 'alex') {
+    setTimeout(() => confettiBurst(W() / 2, H() * 0.4, 30), 800);
+    setTimeout(() => showSpeech('帮寿星吹灭蜡烛，愿望许好啦！⭐'), 1300);
+  } else {
+    showSpeech('呼——愿望许好啦！⭐');
+    setTimeout(() => confettiBurst(W() / 2, H() / 2, 80), 1100);
+  }
+}
+
+/* 按钮：亮着→吹灭；灭了→点燃 */
+document.getElementById('btnWish').addEventListener('click', () => {
+  if (candleLit) blowOutCandle('wish'); else relightCandle();
+});
+
+/* Alex靠近蛋糕时，自动吹灭蜡烛（5秒冷却，防止立即重复） */
+function checkCakeProximity() {
+  if (!candleLit || candleBusy) return;
+  if (Date.now() < alexBlowCooldown) return;
+  const alexRect = alexState.el.getBoundingClientRect();
+  const cakeRect = document.querySelector('.cake-wrap').getBoundingClientRect();
+  const dist = Math.abs((alexRect.left + alexRect.width / 2) - (cakeRect.left + cakeRect.width / 2));
+  if (dist < 150) {
+    alexBlowCooldown = Date.now() + 5000;
+    blowOutCandle('alex');
+  }
+}
+
+/* 烟雾生成：多个烟圈从烛芯升起、扩大、飘散 */
+function spawnSmoke() {
+  const cake = document.querySelector('.cake');
+  for (let i = 0; i < 7; i++) {
+    setTimeout(() => {
+      const s = document.createElement('div');
+      s.className = 'smoke';
+      s.style.left = '90px';
+      s.style.bottom = '108px';
+      cake.appendChild(s);
+      // 第一缕细烟几乎笔直升起，随后的烟沿S形曲线摇曳散去
+      const straight = i === 0;
+      const a = straight ? 1.5 : 14 + Math.random() * 12;      // 第一段弯向右的幅度
+      const b = straight ? -1.5 : -(12 + Math.random() * 12);  // 第二段回卷向左
+      const c = straight ? -3 : -(22 + Math.random() * 14);    // 第三段随风飘向一侧散去
+      const life = straight ? 4.2 : 5;
+
+      // 关键：横向摆动与纵向上升使用不同缓动节奏，
+      // 两条运动线不同步 → 合成轨迹自然弯曲，烟迹呈曲线散去
+      gsap.timeline({ onComplete: () => s.remove() })
+        // 纵向：一路缓速上升
+        .to(s, { bottom: '+=175', duration: life, ease: 'power1.out' }, 0)
+        // 横向：先向右弯出，再向左回卷，最后随风飘散（S形）
+        .to(s, {
+          keyframes: [
+            { x: a * 0.6, duration: life * 0.3, ease: 'sine.in' },
+            { x: b, duration: life * 0.35, ease: 'sine.inOut' },
+            { x: c, duration: life * 0.35, ease: 'sine.out' }
+          ]
+        }, 0)
+        // 体积渐渐扩大、浓度渐淡直至散尽
+        .to(s, {
+          keyframes: [
+            { scale: straight ? 1.2 : 1.6, opacity: straight ? .5 : .55, duration: life * 0.3, ease: 'sine.out' },
+            { scale: straight ? 1.9 : 2.6, opacity: straight ? .3 : .38, duration: life * 0.35, ease: 'sine.inOut' },
+            { scale: 3.8, opacity: 0, duration: life * 0.35, ease: 'sine.in' }
+          ]
+        }, 0);
+    }, i * 220);
+  }
+}
+
+let night = false;
+document.getElementById('btnDayNight').addEventListener('click', () => {
+  night = !night;
+  document.getElementById('sky').classList.toggle('night', night);
+  document.body.classList.toggle('night-mode', night);
+  const cel = document.getElementById('celestial');
+  cel.classList.toggle('sun', !night);
+  cel.classList.toggle('moon', night);
+  showSpeech(night ? '夜晚的星空好美！🌙' : '白天回来啦！☀️');
+});
+
+/* ============================================================
+   流星系统：夜空下随机划过
+   ============================================================ */
+function spawnMeteor() {
+  if (!night) return; // 只在夜晚出现
+  const box = document.getElementById('meteors');
+  const m = document.createElement('div');
+  m.className = 'shooting-star';
+  // 起点：屏幕左上区域随机位置
+  const startX = W() * (Math.random() * 0.55);
+  const startY = H() * (Math.random() * 0.18);
+  m.style.left = startX + 'px';
+  m.style.top = startY + 'px';
+  box.appendChild(m);
+
+  // 飞行距离和角度（向右下划过，约35-50度）
+  const dist = 300 + Math.random() * 350;
+  const angleDeg = 35 + Math.random() * 15;
+  const angle = angleDeg * Math.PI / 180;
+  const dx = Math.cos(angle) * dist;
+  const dy = Math.sin(angle) * dist;
+  const dur = 0.7 + Math.random() * 0.6;
+
+  // 拖尾必须指向飞行的反方向（左上方）：
+  // 星体（亮星）在前向下右坠落，拖尾在后拖在左上方。
+  // ::before拖尾从星体向左延伸，rotate(angleDeg)后正好朝向左上 = 运动反方向。
+  // 用gsap.set统一管理旋转，避免GSAP动画x/y时覆盖内联transform导致方向错乱。
+  gsap.set(m, { rotation: angleDeg });
+
+  gsap.timeline({ onComplete: () => m.remove() })
+    .to(m, { opacity: 1, duration: .08 })
+    .to(m, { x: dx, y: dy, duration: dur, ease: 'power1.in' }, 0)
+    .to(m, { opacity: 0, duration: .25 }, dur - .25);
+
+  // 偶尔伴随一句惊喜台词（15%概率）
+  if (Math.random() < 0.15) showSpeech('快看！是流星！🌠');
+}
+
+/* 流星调度：每1.5-4秒随机划过1颗，偶尔连发2-3颗（仅夜晚生效） */
+function meteorLoop() {
+  spawnMeteor();
+  // 25%概率短时间内再来一颗，形成流星雨
+  if (Math.random() < 0.25) setTimeout(spawnMeteor, 300 + Math.random() * 500);
+  if (Math.random() < 0.08) setTimeout(spawnMeteor, 700 + Math.random() * 500);
+  setTimeout(meteorLoop, 1500 + Math.random() * 2500);
+}
+meteorLoop();
+
+/* ---------- 礼物点击打开 ---------- */
+document.querySelectorAll('.gift').forEach(gift => {
+  gift.addEventListener('click', () => {
+    const lid = gift.querySelector('.lid');
+    const bow = gift.querySelector('.bow');
+    // 盖子飞走
+    gsap.to(lid, { y: -120, x: 40, rotation: 60, opacity: 0, duration: .8, ease: 'power2.out' });
+    gsap.to(bow, { y: -100, x: -30, rotation: -45, opacity: 0, duration: .7 });
+    const rect = gift.getBoundingClientRect();
+    confettiBurst(rect.left + rect.width/2, rect.top, 60);
+    showSpeech('打开礼物啦！🎁');
+    // 礼物跳一下
+    gsap.fromTo(gift, { y: 0 }, { y: -30, duration: .25, yoyo: true, repeat: 1, ease: 'power2.out' });
+  });
+  // 礼物待机轻微摇摆
+  gsap.to(gift, { rotation: 2, duration: 1.5 + Math.random(), yoyo: true, repeat: -1, ease: 'sine.inOut' });
+});
+
+/* ---------- 标题鼠标视差（不影响角色） ---------- */
+window.addEventListener('mousemove', e => {
+  const rx = (e.clientX / W() - .5);
+  gsap.to('.title-area', { x: rx * -15, duration: 1.2, ease: 'power2.out', overwrite: 'auto' });
+});
+
+/* ============================================================
+   键盘控制系统：Alex（方向键/WASD可移动）· Steve（原地待机）
+   ============================================================ */
+let introDone = false; // 入场动画结束后才允许控制
+
+/* 角色状态：x=水平位置(px, 相对于初始锚点的偏移), yOff=垂直偏移, vy=垂直速度, grounded=是否在地面 */
+const alexState  = { el: document.getElementById('alex'),  x: 0, yOff: 0, vy: 0, grounded: true, facing: 1 };
+
+const MOVE_SPEED = 4.2;      // 每帧移动像素
+const JUMP_VELOCITY = -13;   // 跳跃初速度
+const GRAVITY = 0.7;         // 重力加速度
+
+const keys = {};
+window.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  // 阻止方向键滚动页面
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
+  if (!keys[k]) {
+    keys[k] = true;
+    // 按下瞬间触发跳跃（仅在地面上）
+    if ((k === 'arrowup' || k === 'w' || k === ' ') && alexState.grounded && introDone) {
+      alexState.vy = JUMP_VELOCITY;
+      alexState.grounded = false;
+      alexState.el.classList.add('jumping');
+      setTimeout(() => alexState.el.classList.remove('jumping'), 500);
+    }
+  }
+});
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+function gameLoop() {
+  if (introDone) {
+    /* --- Alex 键盘移动 --- */
+    let moving = false;
+    if (keys['arrowleft'] || keys['a'])  { alexState.x -= MOVE_SPEED; alexState.facing = -1; moving = true; }
+    if (keys['arrowright'] || keys['d']) { alexState.x += MOVE_SPEED; alexState.facing = 1;  moving = true; }
+
+// 无距离限制：Alex可自由行走，能走到蛋糕右侧
+
+    // 跳跃物理
+    if (!alexState.grounded) {
+      alexState.yOff += alexState.vy;
+      alexState.vy += GRAVITY;
+      if (alexState.yOff >= 0) { alexState.yOff = 0; alexState.vy = 0; alexState.grounded = true; }
+    }
+
+    // 应用Alex位置（x偏移 + 跳跃y偏移 + 朝向翻转）
+    alexState.el.style.transform =
+      `translateX(${alexState.x}px) translateY(${alexState.yOff}px) scaleX(${alexState.facing})`;
+
+    // 走路动画类
+    alexState.el.classList.toggle('walking', moving && alexState.grounded);
+
+    /* --- 检测Alex靠近礼物盒 → 弹出宝物 --- */
+    checkGiftProximity();
+    /* --- 检测Alex靠近蛋糕 → 吹灭蜡烛 --- */
+    checkCakeProximity();
+  }
+  requestAnimationFrame(gameLoop);
+}
+gameLoop();
+
+/* ============================================================
+   Alex靠近礼物盒 → 弹出宝石/宝剑等宝物
+   ============================================================ */
+const TREASURES = [
+  { icon: '💎', name: '钻石' },
+  { icon: '⚔️', name: '铁剑' },
+  { icon: '🗡️', name: '钻石剑' },
+  { icon: '🟢', name: '绿宝石' },
+  { icon: '🥇', name: '金锭' },
+  { icon: '🔮', name: '附魔瓶' },
+  { icon: '🍎', name: '金苹果' },
+  { icon: '🛡️', name: '盾牌' },
+];
+const giftState = {}; // 每个礼物的冷却状态
+
+function checkGiftProximity() {
+  const alexRect = alexState.el.getBoundingClientRect();
+  const alexCX = alexRect.left + alexRect.width / 2;
+
+  document.querySelectorAll('.gift').forEach((gift, idx) => {
+    const r = gift.getBoundingClientRect();
+    const giftCX = r.left + r.width / 2;
+    const dist = Math.abs(alexCX - giftCX);
+
+    // 距离小于110px 且 冷却结束 → 弹出宝物
+    if (dist < 110 && (!giftState[idx] || Date.now() - giftState[idx] > 2500)) {
+      giftState[idx] = Date.now();
+      popTreasure(gift, r);
+    }
+  });
+}
+
+function popTreasure(gift, rect) {
+  const t = TREASURES[Math.floor(Math.random() * TREASURES.length)];
+  const el = document.createElement('div');
+  el.className = 'treasure';
+  el.innerHTML = t.icon + '<div class="treasure-label">' + t.name + '</div>';
+  // 从礼物盒顶部弹出
+  el.style.left = (rect.left + rect.width / 2 - 17) + 'px';
+  el.style.top = (rect.top - 10) + 'px';
+  document.getElementById('scene').appendChild(el);
+
+  // 弹出 → 上抛旋转 → 下落消失
+  gsap.timeline({ onComplete: () => el.remove() })
+    .fromTo(el, { y: 10, scale: 0, rotation: -20 },
+      { y: -90, scale: 1, rotation: 15, duration: .55, ease: 'back.out(2)' })
+    .to(el, { y: -110, rotation: -10, duration: .3, ease: 'sine.inOut' })
+    .to(el, { y: -60, scale: 0, opacity: 0, rotation: 30, duration: .45, ease: 'power2.in' });
+
+  // 礼物盒开心跳一下 + 彩纸
+  gsap.fromTo(gift, { y: 0 }, { y: -14, duration: .2, yoyo: true, repeat: 1, ease: 'power2.out' });
+  confettiBurst(rect.left + rect.width / 2, rect.top, 15);
+
+  const lines = ['找到了' + t.name + '！' + t.icon, '哇！是' + t.name + '！', t.icon + ' 获得' + t.name + '！'];
+  showSpeech(lines[Math.floor(Math.random() * lines.length)]);
+}
+
+/* ---------- 待机呼吸（两角色） ---------- */
+gsap.to('.steve .body', { scaleY: 1.03, duration: 1.2, yoyo: true, repeat: -1, ease: 'sine.inOut', transformOrigin: 'bottom' });
+gsap.to('.alex .body',  { scaleY: 1.03, duration: 1.4, yoyo: true, repeat: -1, ease: 'sine.inOut', transformOrigin: 'bottom' });
+/* Steve（寿星）挥手致意 */
+gsap.to('.steve .arm.r', { rotation: -35, duration: .9, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: 2 });
+
+/* ---------- 开场自动放一发烟花（高空） ---------- */
+setTimeout(() => launchFirework(W() * 0.7, H() * 0.1), 3000);
+</script>
+</body>
+</html>
